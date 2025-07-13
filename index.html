@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>코딩 우주선 방탈출 게임 - 최종판</title>
+    <style>
+        /* 기본 스타일 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background-color: #1a1a1a;
+        }
+
+        /* 게임 컨테이너 */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            max-width: 1200px;
+            height: auto;
+            margin: auto;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        #background-image {
+            width: 100%;
+            display: block;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        /* 클릭 가능한 오브젝트 공통 스타일 */
+        .clickable-object {
+            position: absolute;
+            cursor: pointer;
+            /* 개발 시 위치 확인용 임시 테두리 */
+            /* border: 2px dashed yellow; */
+            transition: background-color 0.2s;
+            -webkit-tap-highlight-color: transparent;
+            border-radius: 8px;
+        }
+
+        @media (hover: hover) {
+            .clickable-object:hover {
+                background-color: rgba(255, 255, 0, 0.4);
+            }
+        }
+        
+        /* 1단계 오브젝트 위치 */
+        #monitor { top: 55%; left: 4%; width: 28%; height: 28%; }
+        #light-bulb { top: 19%; left: 9%; width: 8%; height: 20%; }
+        #clock { top: 65%; left: 60%; width: 20%; height: 25%; }
+        #engine { top: 25%; left: 29%; width: 42%; height: 50%; border-radius: 50%; }
+        #exit-door { top: 40%; left: 70%; width: 15%; height: 45%; }
+        
+        /* 2단계 오브젝트 위치 */
+        #earth-gate { top: 30%; left: 34%; width: 32%; height: 40%; border-radius: 50%; }
+        #asteroid1 { top: 15%; left: 10%; width: 18%; height: 20%; }
+        #asteroid2 { top: 20%; left: 70%; width: 20%; height: 22%; }
+        #asteroid3 { top: 65%; left: 15%; width: 15%; height: 18%; }
+        #asteroid4 { top: 60%; left: 68%; width: 22%; height: 25%; }
+        
+        /* 모달 스타일 (공통) */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.75); display: flex; justify-content: center;
+            align-items: center; z-index: 1000; opacity: 1; transition: opacity 0.3s ease;
+            padding: 15px; box-sizing: border-box;
+        }
+        .modal.hidden { opacity: 0; pointer-events: none; }
+        .modal-content {
+            background-color: #e9e9e9; color: #333; padding: 25px; border-radius: 10px;
+            text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            width: 100%; max-width: 480px;
+        }
+        .modal-content h3 { margin-top: 0; color: #005a9c; }
+        .modal-content p { font-size: 1.1em; margin-bottom: 20px; }
+        .modal-content input[type="text"] {
+            width: 80%; padding: 10px; margin-bottom: 20px;
+            border: 1px solid #ccc; border-radius: 5px; font-size: 1em;
+        }
+        .modal-content button {
+            padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;
+            font-size: 1em; margin: 5px; transition: all 0.2s;
+        }
+        .modal-content button:active { transform: scale(0.98); }
+        .modal-content .close-button { background-color: #888; color: white; }
+        .modal-content .close-button:hover { background-color: #777; }
+        
+        /* 퀴즈 유형별 버튼 스타일 */
+        .quiz-option-btn, #ox-options button, #fill-in-the-blank-submit, #password-submit {
+             background-color: #4a6c8c; color: white;
+        }
+        .quiz-option-btn:hover, #ox-options button:hover, #fill-in-the-blank-submit:hover, #password-submit:hover {
+             background-color: #5a86b0;
+        }
+        #mcq-options .quiz-option-btn, #ox-options button { display: block; width: 90%; margin: 10px auto; padding: 12px; font-size: 1.1em; }
+
+        /* 기타 스타일 */
+        #memory-game-board {
+            display: grid; grid-template-columns: repeat(5, 1fr);
+            gap: 8px; margin: 20px auto; max-width: 400px;
+        }
+        .card { width: 100%; padding-bottom: 100%; position: relative; perspective: 1000px; cursor: pointer; }
+        .card-inner { position: absolute; top:0; left: 0; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
+        .card.is-flipped .card-inner { transform: rotateY(180deg); }
+        .card-face {
+            position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden;
+            backface-visibility: hidden; display: flex; justify-content: center; align-items: center;
+            font-size: 2em; border-radius: 5px; box-sizing: border-box;
+        }
+        .card-front { background: linear-gradient(45deg, #2c3e50, #34495e); }
+        .card-back { background-color: #f0f0f0; color: black; transform: rotateY(180deg); }
+        #memory-game-hint { font-weight: bold; color: #28a745; margin-top: 15px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <img src="https://i.postimg.cc/FHXsH6Jf/Whisk-storyboardacaf958668fe412e9fba63ad-1.jpg" alt="우주선 내부 배경" id="background-image">
+        
+        <div id="room1-objects">
+            <div class="clickable-object" id="monitor" title="모니터"></div>
+            <div class="clickable-object" id="light-bulb" title="전구"></div>
+            <div class="clickable-object" id="clock" title="시계"></div>
+            <div class="clickable-object" id="engine" title="엔진"></div>
+            <div class="clickable-object" id="exit-door" title="탈출구"></div>
+        </div>
+        <div id="room2-objects" class="hidden">
+            <div class="clickable-object" id="earth-gate" title="지구 귀환 게이트"></div>
+            <div class="clickable-object" id="asteroid1" title="첫 번째 소행성"></div>
+            <div class="clickable-object" id="asteroid2" title="두 번째 소행성"></div>
+            <div class="clickable-object" id="asteroid3" title="세 번째 소행성"></div>
+            <div class="clickable-object" id="asteroid4" title="네 번째 소행성"></div>
+        </div>
+    </div>
+
+    <!-- 모든 모달들 -->
+    <div id="info-modal" class="modal hidden"><div class="modal-content"><p id="info-text"></p><button class="close-button">닫기</button></div></div>
+    <div id="mcq-modal" class="modal hidden"><div class="modal-content"><h3>퀴즈</h3><p id="mcq-question"></p><div id="mcq-options"></div><button class="close-button">닫기</button></div></div>
+    <div id="ox-quiz-modal" class="modal hidden"><div class="modal-content"><h3>전구 퀴즈</h3><p id="ox-question"></p><div id="ox-options"></div><button class="close-button">닫기</button></div></div>
+    <div id="memory-game-modal" class="modal hidden"><div class="modal-content"><h3>엔진부 메모리 해독</h3><p>같은 이모티콘을 찾아 짝을 맞추세요.</p><div id="memory-game-board"></div><p id="memory-game-hint" class="hidden"></p><button class="close-button">닫기</button></div></div>
+    <div id="fill-in-the-blank-modal" class="modal hidden"><div class="modal-content"><h3>시계 암호</h3><p id="fill-in-the-blank-question"></p><input type="text" id="fill-in-the-blank-answer" placeholder="정답 함수를 입력하세요"><button id="fill-in-the-blank-submit" class="quiz-option-btn">정답 확인</button><button class="close-button">닫기</button></div></div>
+    <div id="password-modal" class="modal hidden"><div class="modal-content"><h3 id="password-title"></h3><p id="password-desc"></p><input type="text" id="password-input" maxlength="4"><button id="password-submit">확인</button><button class="close-button">닫기</button></div></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 게임 상태 및 변수 초기화 ---
+            let passwordDigits = [];
+            const solvedObjects = {
+                monitor: false, lightBulb: false, engine: false, clock: false,
+                asteroid1: false, asteroid2: false, asteroid3: false, asteroid4: false
+            };
+
+            // --- DOM 요소 ---
+            const backgroundImage = document.getElementById('background-image');
+            const room1Objects = document.getElementById('room1-objects');
+            const room2Objects = document.getElementById('room2-objects');
+            const clickableObjects = {
+                monitor: document.getElementById('monitor'),
+                lightBulb: document.getElementById('light-bulb'),
+                engine: document.getElementById('engine'),
+                clock: document.getElementById('clock'),
+                exitDoor: document.getElementById('exit-door'),
+                earthGate: document.getElementById('earth-gate'),
+                asteroid1: document.getElementById('asteroid1'),
+                asteroid2: document.getElementById('asteroid2'),
+                asteroid3: document.getElementById('asteroid3'),
+                asteroid4: document.getElementById('asteroid4'),
+            };
+            const modals = {
+                info: document.getElementById('info-modal'),
+                mcq: document.getElementById('mcq-modal'),
+                ox: document.getElementById('ox-quiz-modal'),
+                memory: document.getElementById('memory-game-modal'),
+                fill: document.getElementById('fill-in-the-blank-modal'),
+                password: document.getElementById('password-modal')
+            };
+            const infoText = document.getElementById('info-text');
+
+            // --- 공용 함수 ---
+            const openModal = (modal) => modal.classList.remove('hidden');
+            const closeModal = (modal) => modal.classList.add('hidden');
+            document.querySelectorAll('.close-button').forEach(btn => btn.addEventListener('click', () => btn.closest('.modal').classList.add('hidden')));
+            
+            function showHint(objectName, hintText) {
+                solvedObjects[objectName] = true;
+                infoText.textContent = hintText;
+                openModal(modals.info);
+            }
+            
+            function changeStage() {
+                backgroundImage.style.opacity = 0;
+                setTimeout(() => {
+                    backgroundImage.src = 'https://i.postimg.cc/P5HyQtwd/Whisk-storyboardfeba34587f4f455abf40dbf9.jpg';
+                    room1Objects.classList.add('hidden');
+                    room2Objects.classList.remove('hidden');
+                    backgroundImage.style.opacity = 1;
+                }, 500);
+            }
+
+            function setupMcqModal({ question, options, onCorrect, onWrong }) {
+                const modal = modals.mcq;
+                modal.querySelector('h3').textContent = '퀴즈';
+                modal.querySelector('#mcq-question').textContent = question;
+                const optionsContainer = modal.querySelector('#mcq-options');
+                optionsContainer.innerHTML = '';
+
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.textContent = opt.text;
+                    btn.className = 'quiz-option-btn';
+                    btn.onclick = () => {
+                        closeModal(modal);
+                        if (opt.correct) onCorrect();
+                        else onWrong();
+                    };
+                    optionsContainer.appendChild(btn);
+                });
+                openModal(modal);
+            }
+            
+            // --- 1단계 로직 ---
+            function generatePassword() {
+                const numbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+                numbers.sort(() => Math.random() - 0.5);
+                passwordDigits = numbers.slice(0, 4);
+            }
+
+            clickableObjects.monitor.addEventListener('click', () => {
+                if (solvedObjects.monitor) return showHint('monitor', `이미 해결했습니다. [첫 번째 숫자는 ${passwordDigits[0]}]`);
+                setupMcqModal({
+                    question: "변수는 무엇을 할 때 사용하는 걸까요?",
+                    options: [
+                        { text: 'A. 컴퓨터에게 노래를 부르게 할 때', correct: false },
+                        { text: 'B. 숫자나 글자를 잠깐 저장해둘 때', correct: true },
+                        { text: 'C. 그림을 그릴 때', correct: false },
+                        { text: 'D. 컴퓨터를 끌 때', correct: false }
+                    ],
+                    onCorrect: () => showHint('monitor', `정답! [첫 번째 숫자는 ${passwordDigits[0]} 입니다.]`),
+                    onWrong: () => alert('오답입니다. 다시 시도해보세요.')
+                });
+            });
+
+            // --- [수정된 부분] 전구 퀴즈 ---
+            clickableObjects.lightBulb.addEventListener('click', () => {
+                if (solvedObjects.lightBulb) {
+                    showHint('lightBulb', `이미 해결한 문제입니다. [비밀번호의 두 번째 숫자는 ${passwordDigits[1]} 입니다.]`);
+                    return;
+                }
+                
+                const modal = modals.ox;
+                modal.querySelector('#ox-question').textContent = "프로그래밍에서 5 > 2는 참(True)이다.";
+                const optionsContainer = modal.querySelector('#ox-options');
+                optionsContainer.innerHTML = `
+                    <button data-answer="O">⭕ O</button>
+                    <button data-answer="X">❌ X</button>
+                `;
+
+                optionsContainer.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        closeModal(modal);
+                        if (btn.dataset.answer === 'O') {
+                            showHint('lightBulb', `정답! 전구가 깜빡이며 신호를 보낸다. [비밀번호의 두 번째 숫자는 ${passwordDigits[1]} 입니다.]`);
+                        } else {
+                            alert('오답입니다. 다시 생각해보세요.');
+                        }
+                    });
+                });
+                
+                openModal(modal);
+            });
+
+            clickableObjects.clock.addEventListener('click', () => {
+                 if (solvedObjects.clock) return showHint('clock', `이미 해결했습니다. [네 번째 숫자는 ${passwordDigits[3]}]`);
+                 const questionModal = modals.fill;
+                 questionModal.querySelector('p').textContent = "사용자에게 키보드로 입력을 받을 때 사용하는 함수는?";
+                 const answerInput = questionModal.querySelector('input');
+                 answerInput.value = '';
+                 questionModal.querySelector('#fill-in-the-blank-submit').onclick = () => {
+                    const userAnswer = answerInput.value.trim().toLowerCase();
+                    if (userAnswer === 'input()' || userAnswer === 'input') {
+                        closeModal(questionModal);
+                        showHint('clock', `정답! [네 번째 숫자는 ${passwordDigits[3]} 입니다.]`);
+                    } else {
+                        alert('오답입니다. 괄호()까지 정확하게 입력해주세요.');
+                    }
+                 };
+                 openModal(questionModal);
+            });
+
+            clickableObjects.engine.addEventListener('click', () => {
+                if (solvedObjects.engine) return showHint('engine', `이미 해결했습니다. [세 번째 숫자는 ${passwordDigits[2]}]`);
+                openModal(modals.memory);
+                initializeMemoryGame();
+            });
+            
+            function initializeMemoryGame() {
+                const board = document.getElementById('memory-game-board');
+                const hint = document.getElementById('memory-game-hint');
+                const cards = ['🖥️', '🖥️', '📦', '📦', '🧠', '🧠', '🔁', '🔁', '❓', '❓'];
+                let flipped = [], matched = 0, lock = false;
+                board.innerHTML = '';
+                hint.classList.add('hidden');
+                cards.sort(() => Math.random() - 0.5);
+                cards.forEach(val => {
+                    const card = document.createElement('div');
+                    card.classList.add('card');
+                    card.dataset.value = val;
+                    card.innerHTML = `<div class="card-inner"><div class="card-face card-front"></div><div class="card-face card-back">${val}</div></div>`;
+                    card.addEventListener('click', function() {
+                        if (lock || this.classList.contains('is-flipped') || flipped[0] === this) return;
+                        this.classList.add('is-flipped');
+                        flipped.push(this);
+                        if (flipped.length === 2) {
+                            lock = true;
+                            setTimeout(() => {
+                                if (flipped[0].dataset.value === flipped[1].dataset.value) {
+                                    matched++;
+                                    if (matched === cards.length / 2) {
+                                        hint.textContent = `해독 완료! [세 번째 숫자는 ${passwordDigits[2]} 입니다.]`;
+                                        hint.classList.remove('hidden');
+                                        solvedObjects.engine = true;
+                                    }
+                                } else {
+                                    flipped[0].classList.remove('is-flipped');
+                                    flipped[1].classList.remove('is-flipped');
+                                }
+                                flipped = [];
+                                lock = false;
+                            }, 800);
+                        }
+                    });
+                    board.appendChild(card);
+                });
+            }
+
+            clickableObjects.exitDoor.addEventListener('click', () => {
+                const modal = modals.password;
+                modal.querySelector('#password-title').textContent = '탈출구 잠금장치';
+                modal.querySelector('#password-desc').textContent = '획득한 4자리 비상 코드를 순서대로 입력하자.';
+                const input = modal.querySelector('#password-input');
+                input.type = 'text';
+                input.maxLength = 4;
+                input.inputMode = 'numeric';
+                input.placeholder = '비밀번호 4자리';
+                input.value = '';
+                
+                modal.querySelector('#password-submit').onclick = () => {
+                    if (input.value === passwordDigits.join('')) {
+                        closeModal(modal);
+                        changeStage(); // 2단계로 전환
+                    } else {
+                        alert('비상 코드가 틀렸습니다.');
+                    }
+                };
+                openModal(modal);
+            });
+
+            // --- 2단계 로직 ---
+            clickableObjects.asteroid1.addEventListener('click', () => {
+                if(solvedObjects.asteroid1) return showHint('asteroid1', "이미 데이터 조각을 획득했습니다. [세 번째 글자는 '성' 입니다.]");
+                setupMcqModal({
+                    question: "웹사이트에서 CSS는 뭘 할까요?",
+                    options: [
+                        { text: 'A. 하늘에서 비가 오게 한다', correct: false },
+                        { text: 'B. 모자를 쓰게 한다', correct: false },
+                        { text: 'C. 글씨나 배경에 예쁜 색을 입힌다', correct: true }
+                    ],
+                    onCorrect: () => showHint('asteroid1', "정답! [세 번째 글자는 '성' 입니다.]"),
+                    onWrong: () => alert('오답입니다. 소행성이 더 멀어집니다.')
+                });
+            });
+
+            clickableObjects.asteroid2.addEventListener('click', () => {
+                if(solvedObjects.asteroid2) return showHint('asteroid2', "이미 데이터 조각을 획득했습니다. [첫 번째 글자는 '탈' 입니다.]");
+                 setupMcqModal({
+                    question: "웹페이지를 만들 때 HTML은 무엇을 하나요?",
+                    options: [
+                        { text: 'A. 글씨, 사진, 버튼 같은 내용을 만든다', correct: true },
+                        { text: 'B. 컴퓨터를 끈다', correct: false },
+                        { text: 'C. 색깔을 바꾼다', correct: false }
+                    ],
+                    onCorrect: () => showHint('asteroid2', "정답! [첫 번째 글자는 '탈' 입니다.]"),
+                    onWrong: () => alert('오답입니다. 소행성이 더 멀어집니다.')
+                });
+            });
+
+            clickableObjects.asteroid3.addEventListener('click', () => {
+                if(solvedObjects.asteroid3) return showHint('asteroid3', "이미 데이터 조각을 획득했습니다. [네 번째 글자는 '공' 입니다.]");
+                setupMcqModal({
+                    question: "버튼을 만들고, 색칠하고, 누르면 말하게 하려면 어떤 순서일까요?",
+                    options: [
+                        { text: 'A. 말하게 하기 → 만들기 → 색칠하기', correct: false },
+                        { text: 'B. 만들기 → 색칠하기 → 말하게 하기', correct: true },
+                        { text: 'C. 춤추기 → 노래하기 → 요리하기', correct: false }
+                    ],
+                    onCorrect: () => showHint('asteroid3', "정답! [네 번째 글자는 '공' 입니다.]"),
+                    onWrong: () => alert('오답입니다. 소행성이 더 멀어집니다.')
+                });
+            });
+
+            clickableObjects.asteroid4.addEventListener('click', () => {
+                if(solvedObjects.asteroid4) return showHint('asteroid4', "이미 데이터 조각을 획득했습니다. [두 번째 글자는 '출' 입니다.]");
+                setupMcqModal({
+                    question: "웹페이지에서 JavaScript는 무엇을 할 때 쓰나요?",
+                    options: [
+                        { text: 'A. 글자 색깔을 바꾼다', correct: false },
+                        { text: 'B. 버튼을 누르면 반응하게 한다', correct: true },
+                        { text: 'C. 그림을 그린다', correct: false }
+                    ],
+                    onCorrect: () => showHint('asteroid4', "정답! [두 번째 글자는 '출' 입니다.]"),
+                    onWrong: () => alert('오답입니다. 소행성이 더 멀어집니다.')
+                });
+            });
+
+            clickableObjects.earthGate.addEventListener('click', () => {
+                const modal = modals.password;
+                modal.querySelector('#password-title').textContent = '지구 귀환 게이트';
+                modal.querySelector('#password-desc').textContent = '획득한 글자들을 순서에 맞게 조합하여 최종 암호를 입력하세요.';
+                const input = modal.querySelector('#password-input');
+                input.type = 'text';
+                input.maxLength = 4;
+                input.inputMode = 'text';
+                input.placeholder = '최종 암호 4글자';
+                input.value = '';
+                
+                modal.querySelector('#password-submit').onclick = () => {
+                    if (input.value === '탈출성공') {
+                        closeModal(modal);
+                        // --- [수정된 부분] 최종 성공 메시지 ---
+                        alert('탈출 성공! 🎉 집으로 귀환~!');
+                        backgroundImage.style.opacity = 0;
+                        setTimeout(() => {
+                           backgroundImage.src = 'https://i.postimg.cc/9fhffnK8/Whisk-17c14cbf14.jpg';
+                           room2Objects.classList.add('hidden');
+                           backgroundImage.style.opacity = 1;
+                        }, 500);
+                    } else {
+                        alert('암호가 틀렸습니다. 획득한 힌트의 순서를 잘 확인해보세요.');
+                    }
+                };
+                openModal(modal);
+            });
+
+            // --- 게임 시작 ---
+            generatePassword();
+        });
+    </script>
+</body>
+</html>
